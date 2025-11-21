@@ -208,7 +208,6 @@ export default async function handler(req) {
       );
     }
 
-  try {
     const method = req.method;
 
     const corsHeaders = {
@@ -217,21 +216,21 @@ export default async function handler(req) {
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
     };
 
-  if (method === "OPTIONS") {
-    return new Response(null, { status: 204, headers: corsHeaders });
-  }
+    if (method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
 
-  if (path === "/api/health" || path === "/health") {
-    return new Response(
-      JSON.stringify({ status: "ok", message: "LunaGlow API is running" }),
-      {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  }
+    if (path === "/api/health" || path === "/health") {
+      return new Response(
+        JSON.stringify({ status: "ok", message: "LunaGlow API is running" }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
+    }
 
-  if (path === "/api/chat" || path === "/chat") {
+    if (path === "/api/chat" || path === "/chat") {
     try {
       const body = await req.json();
       const { message, sessionId } = body;
@@ -316,59 +315,59 @@ export default async function handler(req) {
     }
   }
 
-  if (path === "/api/chat/clear" || path === "/chat/clear") {
-    try {
-      const body = await req.json();
-      const { sessionId } = body;
+    if (path === "/api/chat/clear" || path === "/chat/clear") {
+      try {
+        const body = await req.json();
+        const { sessionId } = body;
 
-      if (!sessionId) {
-        return new Response(
-          JSON.stringify({ error: "Session ID is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      if (sessions.has(sessionId)) {
-        sessions.delete(sessionId);
-        rateLimitStore.sessionRequests.delete(sessionId);
-        return new Response(
-          JSON.stringify({ message: "Session cleared successfully" }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      } else {
-        return new Response(
-          JSON.stringify({ error: "Session not found" }),
-          {
-            status: 404,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    } catch (error) {
-      console.error("Error clearing session:", error);
-      return new Response(
-        JSON.stringify({ error: error.message || "Internal server error" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        if (!sessionId) {
+          return new Response(
+            JSON.stringify({ error: "Session ID is required" }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
         }
-      );
-    }
-  }
 
-  return new Response(
-    JSON.stringify({ error: "Not found" }),
-    {
-      status: 404,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+        if (sessions.has(sessionId)) {
+          sessions.delete(sessionId);
+          rateLimitStore.sessionRequests.delete(sessionId);
+          return new Response(
+            JSON.stringify({ message: "Session cleared successfully" }),
+            {
+              status: 200,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        } else {
+          return new Response(
+            JSON.stringify({ error: "Session not found" }),
+            {
+              status: 404,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+      } catch (error) {
+        console.error("Error clearing session:", error);
+        return new Response(
+          JSON.stringify({ error: error.message || "Internal server error" }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
     }
-  );
+
+    return new Response(
+      JSON.stringify({ error: "Not found" }),
+      {
+        status: 404,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      }
+    );
   } catch (error) {
     console.error("Handler error:", error);
     return new Response(
