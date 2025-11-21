@@ -1,12 +1,21 @@
+import { Hono } from "hono";
+import { cors } from "hono/cors";
 import { LunaGlowCustomerServiceAgent } from "../customer_service_agent.js";
 import { existsSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-
 import dotenv from "dotenv";
+
 if (existsSync(".env")) {
   dotenv.config();
 }
+
+const app = new Hono();
+
+// Configuration CORS
+app.use("*", cors({
+  origin: "*",
+  allowMethods: ["GET", "POST", "OPTIONS", "DELETE"],
+  allowHeaders: ["Content-Type", "Authorization"],
+}));
 
 const sessions = new Map();
 
@@ -43,16 +52,16 @@ setInterval(() => {
   );
 }, 60000);
 
-function getClientIP(req) {
-  const forwarded = req.headers.get("x-forwarded-for");
+function getClientIP(c) {
+  const forwarded = c.req.header("x-forwarded-for");
   if (forwarded) {
     return forwarded.split(",")[0].trim();
   }
-  const realIP = req.headers.get("x-real-ip");
+  const realIP = c.req.header("x-real-ip");
   if (realIP) {
     return realIP;
   }
-  return req.headers.get("host") || "unknown";
+  return c.req.header("host") || "unknown";
 }
 
 function checkRateLimit(sessionId, clientIP) {
@@ -140,194 +149,172 @@ async function getOrCreateAgent(sessionId) {
   return sessions.get(sessionId);
 }
 
-export default async function handler(req) {
+// Health check - retourne immédiatement sans initialisation
+app.get("/health", (c) => {
+  return c.json({ 
+    status: "ok", 
+    message: "LunaGlow API is running"
+  });
+});
+
+app.get("/api/health", (c) => {
+  return c.json({ 
+    status: "ok", 
+    message: "LunaGlow API is running"
+  });
+});
+
+// Chat endpoint
+app.post("/api/chat", async (c) => {
   try {
-    const url = new URL(req.url);
-    const path = url.pathname;
-    const method = req.method;
+    const body = await c.req.json();
+    const { message, sessionId } = body;
 
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    };
-
-    // Health check - retourne immédiatement sans initialisation
-    if (path === "/api/health" || path === "/health") {
-      return new Response(
-        JSON.stringify({ 
-          status: "ok", 
-          message: "LunaGlow API is running"
-        }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
+    if (!message) {
+      return c.json({ error: "Message is required" }, 400);
     }
 
-    // OPTIONS pour CORS - retourne immédiatement
-    if (method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders });
+    if (message.length > RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH) {
+      return c.json({
+        error: `Message too long. Maximum ${RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH} characters allowed.`,
+      }, 400);
     }
 
-    if (path === "/api/chat" || path === "/chat") {
-      try {
-        const body = await req.json();
-        const { message, sessionId } = body;
+    const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const clientIP = getClientIP(c);
 
-        if (!message) {
-          return new Response(
-            JSON.stringify({ error: "Message is required" }),
-            {
-              status: 400,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
-        }
-
-        if (message.length > RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH) {
-          return new Response(
-            JSON.stringify({
-              error: `Message too long. Maximum ${RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH} characters allowed.`,
-            }),
-            {
-              status: 400,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
-        }
-
-        const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        const clientIP = getClientIP(req);
-
-        const rateLimitCheck = checkRateLimit(currentSessionId, clientIP);
-        if (!rateLimitCheck.allowed) {
-          return new Response(
-            JSON.stringify({
-              error: rateLimitCheck.reason,
-              rateLimit: {
-                limit: rateLimitCheck.limit,
-                remaining: rateLimitCheck.remaining,
-              },
-            }),
-            {
-              status: 429,
-              headers: {
-                ...corsHeaders,
-                "Content-Type": "application/json",
-                "Retry-After": "60",
-              },
-            }
-          );
-        }
-
-        recordRequest(currentSessionId, clientIP);
-
-        // Initialisation lazy de l'agent uniquement ici
-        const agent = await getOrCreateAgent(currentSessionId);
-
-        const result = await agent.ask(message);
-
-        return new Response(
-          JSON.stringify({
-            answer: result.answer,
-            sessionId: currentSessionId,
-            rateLimit: {
-              sessionRemaining: rateLimitCheck.sessionRemaining,
-              ipMinuteRemaining: rateLimitCheck.ipMinuteRemaining,
-              ipHourRemaining: rateLimitCheck.ipHourRemaining,
-            },
-          }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      } catch (error) {
-        console.error("Error processing chat request:", error);
-        return new Response(
-          JSON.stringify({ 
-            error: error.message || "Internal server error",
-            details: process.env.NODE_ENV === "development" ? error.stack : undefined
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    }
-
-    if (path === "/api/chat/clear" || path === "/chat/clear") {
-      try {
-        const body = await req.json();
-        const { sessionId } = body;
-
-        if (!sessionId) {
-          return new Response(
-            JSON.stringify({ error: "Session ID is required" }),
-            {
-              status: 400,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
-        }
-
-        if (sessions.has(sessionId)) {
-          sessions.delete(sessionId);
-          rateLimitStore.sessionRequests.delete(sessionId);
-          return new Response(
-            JSON.stringify({ message: "Session cleared successfully" }),
-            {
-              status: 200,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
-        } else {
-          return new Response(
-            JSON.stringify({ error: "Session not found" }),
-            {
-              status: 404,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            }
-          );
-        }
-      } catch (error) {
-        console.error("Error clearing session:", error);
-        return new Response(
-          JSON.stringify({ error: error.message || "Internal server error" }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-    }
-
-    return new Response(
-      JSON.stringify({ error: "Not found" }),
-      {
-        status: 404,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      }
-    );
-  } catch (error) {
-    console.error("Handler error:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: "Internal server error",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined
-      }),
-      {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
+    const rateLimitCheck = checkRateLimit(currentSessionId, clientIP);
+    if (!rateLimitCheck.allowed) {
+      return c.json({
+        error: rateLimitCheck.reason,
+        rateLimit: {
+          limit: rateLimitCheck.limit,
+          remaining: rateLimitCheck.remaining,
         },
-      }
-    );
-  }
-}
+      }, 429);
+    }
 
+    recordRequest(currentSessionId, clientIP);
+
+    // Initialisation lazy de l'agent uniquement ici
+    const agent = await getOrCreateAgent(currentSessionId);
+    const result = await agent.ask(message);
+
+    return c.json({
+      answer: result.answer,
+      sessionId: currentSessionId,
+      rateLimit: {
+        sessionRemaining: rateLimitCheck.sessionRemaining,
+        ipMinuteRemaining: rateLimitCheck.ipMinuteRemaining,
+        ipHourRemaining: rateLimitCheck.ipHourRemaining,
+      },
+    });
+  } catch (error) {
+    console.error("Error processing chat request:", error);
+    return c.json({ 
+      error: error.message || "Internal server error",
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined
+    }, 500);
+  }
+});
+
+// Alias pour /chat (sans /api)
+app.post("/chat", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { message, sessionId } = body;
+
+    if (!message) {
+      return c.json({ error: "Message is required" }, 400);
+    }
+
+    if (message.length > RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH) {
+      return c.json({
+        error: `Message too long. Maximum ${RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH} characters allowed.`,
+      }, 400);
+    }
+
+    const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    const clientIP = getClientIP(c);
+
+    const rateLimitCheck = checkRateLimit(currentSessionId, clientIP);
+    if (!rateLimitCheck.allowed) {
+      return c.json({
+        error: rateLimitCheck.reason,
+        rateLimit: {
+          limit: rateLimitCheck.limit,
+          remaining: rateLimitCheck.remaining,
+        },
+      }, 429);
+    }
+
+    recordRequest(currentSessionId, clientIP);
+
+    const agent = await getOrCreateAgent(currentSessionId);
+    const result = await agent.ask(message);
+
+    return c.json({
+      answer: result.answer,
+      sessionId: currentSessionId,
+      rateLimit: {
+        sessionRemaining: rateLimitCheck.sessionRemaining,
+        ipMinuteRemaining: rateLimitCheck.ipMinuteRemaining,
+        ipHourRemaining: rateLimitCheck.ipHourRemaining,
+      },
+    });
+  } catch (error) {
+    console.error("Error processing chat request:", error);
+    return c.json({ 
+      error: error.message || "Internal server error",
+      details: process.env.NODE_ENV === "development" ? error.stack : undefined
+    }, 500);
+  }
+});
+
+// Clear session endpoint
+app.post("/api/chat/clear", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { sessionId } = body;
+
+    if (!sessionId) {
+      return c.json({ error: "Session ID is required" }, 400);
+    }
+
+    if (sessions.has(sessionId)) {
+      sessions.delete(sessionId);
+      rateLimitStore.sessionRequests.delete(sessionId);
+      return c.json({ message: "Session cleared successfully" });
+    } else {
+      return c.json({ error: "Session not found" }, 404);
+    }
+  } catch (error) {
+    console.error("Error clearing session:", error);
+    return c.json({ error: error.message || "Internal server error" }, 500);
+  }
+});
+
+app.post("/chat/clear", async (c) => {
+  try {
+    const body = await c.req.json();
+    const { sessionId } = body;
+
+    if (!sessionId) {
+      return c.json({ error: "Session ID is required" }, 400);
+    }
+
+    if (sessions.has(sessionId)) {
+      sessions.delete(sessionId);
+      rateLimitStore.sessionRequests.delete(sessionId);
+      return c.json({ message: "Session cleared successfully" });
+    } else {
+      return c.json({ error: "Session not found" }, 404);
+    }
+  } catch (error) {
+    console.error("Error clearing session:", error);
+    return c.json({ error: error.message || "Internal server error" }, 500);
+  }
+});
+
+// Export pour Vercel
+export default app;

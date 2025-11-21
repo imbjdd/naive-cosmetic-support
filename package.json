@@ -1,33 +1,35 @@
 {
   "name": "lunaglow-customer-service",
   "version": "1.0.0",
-  "description": "Agent de service client LunaGlow avec LangChain et Bun",
+  "description": "Agent de service client LunaGlow avec LangChain et Hono",
   "type": "module",
   "engines": {
     "node": ">=18.0.0"
   },
-  "main": "customer_service_agent.js",
+  "main": "server.js",
   "scripts": {
-    "start": "bun run customer_service_agent.js",
-    "server": "bun run local-server.js",
-    "api": "bun run local-server.js"
+    "dev": "node server.js",
+    "start": "node server.js",
+    "agent": "node customer_service_agent.js"
   },
   "keywords": [
     "langchain",
     "openai",
     "customer-service",
-    "bun"
+    "hono",
+    "vercel"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@langchain/openai": "^0.3.0",
+    "@hono/node-server": "^1.19.6",
     "@langchain/core": "^0.3.0",
-    "pdf-parse": "^1.1.1",
-    "dotenv": "^16.4.5"
+    "@langchain/openai": "^0.3.0",
+    "dotenv": "^16.4.5",
+    "hono": "^4.10.6",
+    "pdf-parse": "^1.1.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.0"
   }
 }
-

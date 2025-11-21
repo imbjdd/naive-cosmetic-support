@@ -1,11 +1,11 @@
 # LunaGlow Customer Service API
 
-API de service client intelligent utilisant LangChain et Bun pour répondre aux questions des clients basées sur le document PDF LunaGlow.
+API de service client intelligent utilisant LangChain et Hono pour répondre aux questions des clients basées sur le document PDF LunaGlow.
 
 ## Installation
 
 ```bash
-bun install
+npm install
 ```
 
 ## Configuration
@@ -22,34 +22,79 @@ PORT=3000
 
 ## Utilisation
 
-### Lancer le serveur API
+### Lancer le serveur API en développement
 
 ```bash
-bun run server
+npm run dev
 # ou
-bun run api
+npm start
 ```
+
+Le serveur démarre sur `http://localhost:3000`
 
 ### Lancer l'agent en ligne de commande
 
 ```bash
-bun run customer_service_agent.js
+npm run agent
 ```
 
 ## API Endpoints
 
-Voir `API.md` pour la documentation complète de l'API.
+### Health Check
+```bash
+GET /health
+GET /api/health
+```
+
+### Chat
+```bash
+POST /api/chat
+POST /chat
+```
+
+Body:
+```json
+{
+  "message": "Quels sont vos produits?",
+  "sessionId": "optional-session-id"
+}
+```
+
+### Clear Session
+```bash
+POST /api/chat/clear
+POST /chat/clear
+```
+
+Body:
+```json
+{
+  "sessionId": "session-id-to-clear"
+}
+```
 
 ### Exemple rapide
 
 ```bash
-curl -X POST http://localhost:3000/chat \
+curl -X POST http://localhost:3000/api/chat \
   -H "Content-Type: application/json" \
   -d '{"message": "Quels sont vos produits?"}'
 ```
 
+## Déploiement sur Vercel
+
+Le projet est configuré pour être déployé sur Vercel. L'API est dans `api/index.js` et sera automatiquement déployée comme fonction serverless.
+
+```bash
+vercel deploy
+```
+
 ## Rate Limiting
 
-L'API inclut un système de rate limiting pour protéger contre les abus. Voir `API.md` pour plus de détails.
+L'API inclut un système de rate limiting pour protéger contre les abus :
+- 50 requêtes par session
+- 10 requêtes par minute par IP
+- 100 requêtes par heure par IP
+- 100 requêtes par minute globalement
 
 
