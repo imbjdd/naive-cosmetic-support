@@ -1,0 +1,14 @@
+{
+  "functions": {
+    "server.js": {
+      "runtime": "bun@1.0.0"
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "destination": "/server.js"
+    }
+  ]
+}
+
