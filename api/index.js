@@ -136,10 +136,20 @@ async function getOrCreateAgent(sessionId) {
 }
 
 let agentInitialized = false;
+let agentInitializationPromise = null;
 
 async function ensureAgentInitialized() {
-  if (!agentInitialized) {
+  if (agentInitialized) {
+    return;
+  }
+  
+  if (agentInitializationPromise) {
+    return agentInitializationPromise;
+  }
+  
+  agentInitializationPromise = (async () => {
     try {
+      console.log("Initializing agent...");
       const testAgent = new LunaGlowCustomerServiceAgent();
       await testAgent.initialize();
       agentInitialized = true;
@@ -147,12 +157,35 @@ async function ensureAgentInitialized() {
     } catch (error) {
       console.error("Error initializing agent:", error);
       agentInitialized = false;
+      agentInitializationPromise = null;
       throw error;
     }
-  }
+  })();
+  
+  return agentInitializationPromise;
 }
 
 export default async function handler(req) {
+  const url = new URL(req.url);
+  const path = url.pathname;
+  
+  if (path === "/api/health" || path === "/health") {
+    return new Response(
+      JSON.stringify({ 
+        status: "ok", 
+        message: "LunaGlow API is running",
+        agentInitialized: agentInitialized
+      }),
+      {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
+  }
+  
   try {
     await ensureAgentInitialized();
   } catch (error) {
@@ -173,8 +206,6 @@ export default async function handler(req) {
   }
 
   try {
-    const url = new URL(req.url);
-    const path = url.pathname;
     const method = req.method;
 
   const corsHeaders = {
