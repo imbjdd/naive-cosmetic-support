@@ -156,6 +156,7 @@ async function ensureAgentInitialized() {
       console.log("Agent initialized successfully");
     } catch (error) {
       console.error("Error initializing agent:", error);
+      console.error("Stack:", error.stack);
       agentInitialized = false;
       agentInitializationPromise = null;
       throw error;
@@ -166,53 +167,55 @@ async function ensureAgentInitialized() {
 }
 
 export default async function handler(req) {
-  const url = new URL(req.url);
-  const path = url.pathname;
-  
-  if (path === "/api/health" || path === "/health") {
-    return new Response(
-      JSON.stringify({ 
-        status: "ok", 
-        message: "LunaGlow API is running",
-        agentInitialized: agentInitialized
-      }),
-      {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
-    );
-  }
-  
   try {
-    await ensureAgentInitialized();
-  } catch (error) {
-    console.error("Failed to initialize agent:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: "Service temporarily unavailable. Please try again later.",
-        details: process.env.NODE_ENV === "development" ? error.message : undefined
-      }),
-      {
-        status: 503,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*",
-        },
-      }
-    );
-  }
+    const url = new URL(req.url);
+    const path = url.pathname;
+    
+    if (path === "/api/health" || path === "/health") {
+      return new Response(
+        JSON.stringify({ 
+          status: "ok", 
+          message: "LunaGlow API is running",
+          agentInitialized: agentInitialized
+        }),
+        {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
+    
+    try {
+      await ensureAgentInitialized();
+    } catch (error) {
+      console.error("Failed to initialize agent:", error);
+      console.error("Error stack:", error.stack);
+      return new Response(
+        JSON.stringify({ 
+          error: "Service temporarily unavailable. Please try again later.",
+          details: process.env.NODE_ENV === "development" ? error.message : undefined
+        }),
+        {
+          status: 503,
+          headers: {
+            "Content-Type": "application/json",
+            "Access-Control-Allow-Origin": "*",
+          },
+        }
+      );
+    }
 
   try {
     const method = req.method;
 
-  const corsHeaders = {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
-    "Access-Control-Allow-Headers": "Content-Type, Authorization",
-  };
+    const corsHeaders = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS, DELETE",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    };
 
   if (method === "OPTIONS") {
     return new Response(null, { status: 204, headers: corsHeaders });
