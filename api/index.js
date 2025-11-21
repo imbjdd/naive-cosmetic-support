@@ -143,19 +143,39 @@ async function ensureAgentInitialized() {
       const testAgent = new LunaGlowCustomerServiceAgent();
       await testAgent.initialize();
       agentInitialized = true;
+      console.log("Agent initialized successfully");
     } catch (error) {
-      console.error("Error initializing agent:", error.message);
+      console.error("Error initializing agent:", error);
+      agentInitialized = false;
       throw error;
     }
   }
 }
 
 export default async function handler(req) {
-  await ensureAgentInitialized();
+  try {
+    await ensureAgentInitialized();
+  } catch (error) {
+    console.error("Failed to initialize agent:", error);
+    return new Response(
+      JSON.stringify({ 
+        error: "Service temporarily unavailable. Please try again later.",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined
+      }),
+      {
+        status: 503,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
+  }
 
-  const url = new URL(req.url);
-  const path = url.pathname;
-  const method = req.method;
+  try {
+    const url = new URL(req.url);
+    const path = url.pathname;
+    const method = req.method;
 
   const corsHeaders = {
     "Access-Control-Allow-Origin": "*",
@@ -315,5 +335,21 @@ export default async function handler(req) {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     }
   );
+  } catch (error) {
+    console.error("Handler error:", error);
+    return new Response(
+      JSON.stringify({ 
+        error: "Internal server error",
+        details: process.env.NODE_ENV === "development" ? error.message : undefined
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*",
+        },
+      }
+    );
+  }
 }
 
