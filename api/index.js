@@ -127,87 +127,23 @@ function recordRequest(sessionId, clientIP) {
 
 async function getOrCreateAgent(sessionId) {
   if (!sessions.has(sessionId)) {
-    const agent = new LunaGlowCustomerServiceAgent();
-    await agent.initialize();
-    sessions.set(sessionId, agent);
-    return agent;
-  }
-  return sessions.get(sessionId);
-}
-
-let agentInitialized = false;
-let agentInitializationPromise = null;
-
-async function ensureAgentInitialized() {
-  if (agentInitialized) {
-    return;
-  }
-  
-  if (agentInitializationPromise) {
-    return agentInitializationPromise;
-  }
-  
-  agentInitializationPromise = (async () => {
     try {
-      console.log("Initializing agent...");
-      const testAgent = new LunaGlowCustomerServiceAgent();
-      await testAgent.initialize();
-      agentInitialized = true;
-      console.log("Agent initialized successfully");
+      const agent = new LunaGlowCustomerServiceAgent();
+      await agent.initialize();
+      sessions.set(sessionId, agent);
+      return agent;
     } catch (error) {
       console.error("Error initializing agent:", error);
-      console.error("Stack:", error.stack);
-      agentInitialized = false;
-      agentInitializationPromise = null;
       throw error;
     }
-  })();
-  
-  return agentInitializationPromise;
+  }
+  return sessions.get(sessionId);
 }
 
 export default async function handler(req) {
   try {
     const url = new URL(req.url);
     const path = url.pathname;
-    
-    if (path === "/api/health" || path === "/health") {
-      return new Response(
-        JSON.stringify({ 
-          status: "ok", 
-          message: "LunaGlow API is running",
-          agentInitialized: agentInitialized
-        }),
-        {
-          status: 200,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
-    }
-    
-    try {
-      await ensureAgentInitialized();
-    } catch (error) {
-      console.error("Failed to initialize agent:", error);
-      console.error("Error stack:", error.stack);
-      return new Response(
-        JSON.stringify({ 
-          error: "Service temporarily unavailable. Please try again later.",
-          details: process.env.NODE_ENV === "development" ? error.message : undefined
-        }),
-        {
-          status: 503,
-          headers: {
-            "Content-Type": "application/json",
-            "Access-Control-Allow-Origin": "*",
-          },
-        }
-      );
-    }
-
     const method = req.method;
 
     const corsHeaders = {
@@ -216,104 +152,113 @@ export default async function handler(req) {
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
     };
 
-    if (method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders });
-    }
-
+    // Health check - retourne immédiatement sans initialisation
     if (path === "/api/health" || path === "/health") {
       return new Response(
-        JSON.stringify({ status: "ok", message: "LunaGlow API is running" }),
-        {
-          status: 200,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
-    }
-
-    if (path === "/api/chat" || path === "/chat") {
-    try {
-      const body = await req.json();
-      const { message, sessionId } = body;
-
-      if (!message) {
-        return new Response(
-          JSON.stringify({ error: "Message is required" }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      if (message.length > RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH) {
-        return new Response(
-          JSON.stringify({
-            error: `Message too long. Maximum ${RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH} characters allowed.`,
-          }),
-          {
-            status: 400,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      }
-
-      const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-      const clientIP = getClientIP(req);
-
-      const rateLimitCheck = checkRateLimit(currentSessionId, clientIP);
-      if (!rateLimitCheck.allowed) {
-        return new Response(
-          JSON.stringify({
-            error: rateLimitCheck.reason,
-            rateLimit: {
-              limit: rateLimitCheck.limit,
-              remaining: rateLimitCheck.remaining,
-            },
-          }),
-          {
-            status: 429,
-            headers: {
-              ...corsHeaders,
-              "Content-Type": "application/json",
-              "Retry-After": "60",
-            },
-          }
-        );
-      }
-
-      recordRequest(currentSessionId, clientIP);
-
-      const agent = await getOrCreateAgent(currentSessionId);
-
-      const result = await agent.ask(message);
-
-      return new Response(
-        JSON.stringify({
-          answer: result.answer,
-          sessionId: currentSessionId,
-          rateLimit: {
-            sessionRemaining: rateLimitCheck.sessionRemaining,
-            ipMinuteRemaining: rateLimitCheck.ipMinuteRemaining,
-            ipHourRemaining: rateLimitCheck.ipHourRemaining,
-          },
+        JSON.stringify({ 
+          status: "ok", 
+          message: "LunaGlow API is running"
         }),
         {
           status: 200,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         }
       );
-    } catch (error) {
-      console.error("Error processing chat request:", error);
-      return new Response(
-        JSON.stringify({ error: error.message || "Internal server error" }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        }
-      );
     }
-  }
+
+    // OPTIONS pour CORS - retourne immédiatement
+    if (method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: corsHeaders });
+    }
+
+    if (path === "/api/chat" || path === "/chat") {
+      try {
+        const body = await req.json();
+        const { message, sessionId } = body;
+
+        if (!message) {
+          return new Response(
+            JSON.stringify({ error: "Message is required" }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        if (message.length > RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH) {
+          return new Response(
+            JSON.stringify({
+              error: `Message too long. Maximum ${RATE_LIMIT_CONFIG.MAX_MESSAGE_LENGTH} characters allowed.`,
+            }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            }
+          );
+        }
+
+        const currentSessionId = sessionId || `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        const clientIP = getClientIP(req);
+
+        const rateLimitCheck = checkRateLimit(currentSessionId, clientIP);
+        if (!rateLimitCheck.allowed) {
+          return new Response(
+            JSON.stringify({
+              error: rateLimitCheck.reason,
+              rateLimit: {
+                limit: rateLimitCheck.limit,
+                remaining: rateLimitCheck.remaining,
+              },
+            }),
+            {
+              status: 429,
+              headers: {
+                ...corsHeaders,
+                "Content-Type": "application/json",
+                "Retry-After": "60",
+              },
+            }
+          );
+        }
+
+        recordRequest(currentSessionId, clientIP);
+
+        // Initialisation lazy de l'agent uniquement ici
+        const agent = await getOrCreateAgent(currentSessionId);
+
+        const result = await agent.ask(message);
+
+        return new Response(
+          JSON.stringify({
+            answer: result.answer,
+            sessionId: currentSessionId,
+            rateLimit: {
+              sessionRemaining: rateLimitCheck.sessionRemaining,
+              ipMinuteRemaining: rateLimitCheck.ipMinuteRemaining,
+              ipHourRemaining: rateLimitCheck.ipHourRemaining,
+            },
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      } catch (error) {
+        console.error("Error processing chat request:", error);
+        return new Response(
+          JSON.stringify({ 
+            error: error.message || "Internal server error",
+            details: process.env.NODE_ENV === "development" ? error.stack : undefined
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
+    }
 
     if (path === "/api/chat/clear" || path === "/chat/clear") {
       try {
