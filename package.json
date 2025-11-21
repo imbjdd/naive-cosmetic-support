@@ -6,8 +6,8 @@
   "main": "customer_service_agent.js",
   "scripts": {
     "start": "bun run customer_service_agent.js",
-    "server": "bun run server.js",
-    "api": "bun run server.js"
+    "server": "bun run local-server.js",
+    "api": "bun run local-server.js"
   },
   "keywords": [
     "langchain",

@@ -25,7 +25,7 @@ PORT=3000
 ### Lancer le serveur API
 
 ```bash
-bun run server.js
+bun run server
 # ou
 bun run api
 ```
