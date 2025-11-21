@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Agent de service client LunaGlow avec LangChain et Bun",
   "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "main": "customer_service_agent.js",
   "scripts": {
     "start": "bun run customer_service_agent.js",

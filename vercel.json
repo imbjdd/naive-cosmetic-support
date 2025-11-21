@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/index.js": {
-      "runtime": "bun@1.0.0"
-    }
-  },
   "rewrites": [
     {
       "source": "/api/(.*)",
