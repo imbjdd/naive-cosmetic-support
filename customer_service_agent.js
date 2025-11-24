@@ -82,7 +82,10 @@ class LunaGlowCustomerServiceAgent {
   }
 
   async _loadPdf() {
-    const fullPath = join(__dirname, this.pdfPath);
+    // Use process.cwd() to get the project root, which works consistently
+    // in both local and Vercel environments
+    const projectRoot = process.cwd();
+    const fullPath = join(projectRoot, this.pdfPath);
     console.log(`Loading PDF: ${fullPath}`);
 
     try {
