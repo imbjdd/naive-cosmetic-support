@@ -2,7 +2,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
-      "includeFiles": ["LunaGlow.pdf", "customer_service_agent.js"]
+      "includeFiles": "LunaGlow.pdf"
     }
   },
   "rewrites": [
