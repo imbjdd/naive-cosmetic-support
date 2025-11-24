@@ -20,11 +20,11 @@ app.use("*", cors({
 const sessions = new Map();
 
 const RATE_LIMIT_CONFIG = {
-  MAX_REQUESTS_PER_SESSION: parseInt(process.env.MAX_REQUESTS_PER_SESSION || "50"),
-  MAX_REQUESTS_PER_IP_PER_MINUTE: parseInt(process.env.MAX_REQUESTS_PER_IP_PER_MINUTE || "10"),
-  MAX_REQUESTS_PER_IP_PER_HOUR: parseInt(process.env.MAX_REQUESTS_PER_IP_PER_HOUR || "100"),
+  MAX_REQUESTS_PER_SESSION: parseInt(process.env.MAX_REQUESTS_PER_SESSION || "1000"),
+  MAX_REQUESTS_PER_IP_PER_MINUTE: parseInt(process.env.MAX_REQUESTS_PER_IP_PER_MINUTE || "200"),
+  MAX_REQUESTS_PER_IP_PER_HOUR: parseInt(process.env.MAX_REQUESTS_PER_IP_PER_HOUR || "2000"),
   MAX_MESSAGE_LENGTH: parseInt(process.env.MAX_MESSAGE_LENGTH || "2000"),
-  GLOBAL_MAX_REQUESTS_PER_MINUTE: parseInt(process.env.GLOBAL_MAX_REQUESTS_PER_MINUTE || "100"),
+  GLOBAL_MAX_REQUESTS_PER_MINUTE: parseInt(process.env.GLOBAL_MAX_REQUESTS_PER_MINUTE || "2000"),
 };
 
 const rateLimitStore = {
