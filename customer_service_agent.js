@@ -82,22 +82,44 @@ class LunaGlowCustomerServiceAgent {
   }
 
   async _loadPdf() {
-    // Use process.cwd() to get the project root, which works consistently
-    // in both local and Vercel environments
-    const projectRoot = process.cwd();
-    const fullPath = join(projectRoot, this.pdfPath);
-    console.log(`Loading PDF: ${fullPath}`);
+    // Try multiple paths to find the PDF, as Vercel's working directory can vary
+    const possiblePaths = [
+      // 1. From process.cwd() (project root)
+      join(process.cwd(), this.pdfPath),
+      // 2. From __dirname (where this file is located) - go up to project root
+      join(__dirname, "..", this.pdfPath),
+      // 3. From __dirname directly (if PDF is in same directory)
+      join(__dirname, this.pdfPath),
+      // 4. Absolute path from __dirname going up two levels (for api/ structure)
+      join(__dirname, "..", "..", this.pdfPath),
+    ];
 
-    try {
-      const dataBuffer = await readFile(fullPath);
-      const data = await pdf(dataBuffer);
-      const pdfText = data.text;
-      console.log(`PDF loaded: ${pdfText.length} characters extracted`);
-      return pdfText;
-    } catch (error) {
-      console.error(`Error loading PDF: ${error.message}`);
-      return "Error: Unable to load PDF.";
+    console.log(`Attempting to load PDF from possible paths:`);
+    for (const path of possiblePaths) {
+      console.log(`  - ${path}`);
     }
+
+    for (const fullPath of possiblePaths) {
+      try {
+        if (existsSync(fullPath)) {
+          console.log(`✓ Found PDF at: ${fullPath}`);
+          const dataBuffer = await readFile(fullPath);
+          const data = await pdf(dataBuffer);
+          const pdfText = data.text;
+          console.log(`PDF loaded: ${pdfText.length} characters extracted`);
+          return pdfText;
+        }
+      } catch (error) {
+        // Continue to next path
+        console.log(`  ✗ Failed to load from ${fullPath}: ${error.message}`);
+      }
+    }
+
+    // If we get here, none of the paths worked
+    console.error(`Error: Unable to load PDF from any of the attempted paths`);
+    console.error(`Current working directory: ${process.cwd()}`);
+    console.error(`__dirname: ${__dirname}`);
+    return "Error: Unable to load PDF.";
   }
 
   async initialize() {
